@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>護理整合紀錄入口系統</title>
+    <!-- 載入 Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* 使用 Inter 字體以獲得專業外觀 */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f4f7f9;
+        }
+        /* 自定義滾動條 (美化效果) */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #e2e8f0;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 4px;
+        }
+        .text-shadow-md {
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .search-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        }
+        .transition-all-300 {
+            transition: all 300ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <!-- 主應用程式容器 -->
+    <div id="app" class="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+        <!-- 頁面會在此處動態切換 -->
+    </div>
+
+    <script>
+        // --- 全局配置與資料結構 ---
+
+        const APP_ID = 'NURSING_RECORD_SYSTEM_V1';
+        const CURRENT_DATE = '2025-11-19'; // 週三
+        const CURRENT_TIME = '16:53';
+        const LOGIN_USER = '護理師 A007';
+
+        // 模擬病房配置
+        const WARD_NAMES = ['1A', '2A', '2B', '3A', '3B'];
+        // 50 個不同的姓名 (符合所有病患姓名不同的要求)
+        const NAMES = [
+            '王小明', '李大華', '陳美玲', '林志穎', '黃雅雯', '吳建豪', '許純美', '鄭元暢', '謝金燕', '羅志祥',
+            '蔡依林', '周杰倫', '五月天', '孫燕姿', '林俊傑', '楊丞琳', '蕭敬騰', '徐熙媛', '徐熙娣', '張惠妹',
+            '劉德華', '郭富城', '張學友', '黎明詩', '王菲', '鄭秀文', '陳奕迅', '容祖兒', '謝霆鋒', 'Twins',
+            '鄧麗君', '鳳飛飛', '劉文正', '費玉清', '江蕙', '黃鶯鶯', '齊秦', '蘇芮', '潘越雲', '羅大佑',
+            '葉歡', '張清芳', '伍佰', 'A-Lin', '田馥甄', '盧廣仲', '韋禮安', '徐佳瑩', '告五人', '動力火車'
+        ];
+
+        let state = {
+            currentPage: 'home', // 'home' or 'record'
+            currentPatient: null, // Selected patient object
+            searchTerm: '',
+            searchResults: [],
+            isSearchExpanded: false,
+            allPatients: [],
+            nursingRecords: JSON.parse(localStorage.getItem(`${APP_ID}_records`)) || [],
+            searchHistory: JSON.parse(localStorage.getItem(`${APP_ID}_history`)) || [],
+        };
+
+        // --- 資料初始化與模擬 ---
+
+        /**
+         * 建立模擬病患資料庫
+         * - 確保 50 個病患姓名獨一無二
+         * - 將護理等級固定為「一般護理」
+         */
+        function createMockPatients() {
+            let patients = [];
+            let patientCounter = 1001;
+            let bedCounter = 0; // 從 0 開始匹配 NAMES 陣列索引
+
+            WARD_NAMES.forEach(ward => {
+                for (let i = 0; i < 10; i++) {
+                    const patientId = `A00${patientCounter++}`;
+                    const name = NAMES[bedCounter]; // 使用唯一的姓名
+                    const gender = (bedCounter % 2 === 0) ? '男' : '女';
+
+                    patients.push({
+                        ward: ward,
+                        bedNumber: `${ward}-${String(i + 1).padStart(2, '0')}`,
+                        medicalId: patientId,
+                        name: name,
+                        gender: gender,
+                        age: 50 + Math.floor(Math.random() * 40), // 50-89歲
+                        admissionDate: `2025-11-${String(Math.floor(Math.random() * 15) + 1).padStart(2, '0')}`,
+                        attendingPhysician: `張醫師 ${Math.floor(Math.random() * 5) + 1} 號`,
+                        nursingLevel: '一般護理', // 依需求移除重症護理
+                    });
+                    bedCounter++;
+                }
+            });
+            return patients;
+        }
+
+        state.allPatients = createMockPatients();
+
+        /**
+         * 建立搜尋索引 (簡化為單一陣列)
+         */
+        function buildSearchIndex() {
+            console.log(`總計載入 ${state.allPatients.length} 位病患資料。`);
+        }
+        buildSearchIndex();
+
+        // --- LocalStorage 函數 ---
+
+        /**
+         * 儲存記錄到 LocalStorage (用於護理記錄或外出外宿記錄)
+         * @param {object} record
+         */
+        function saveNursingRecord(record) {
+            state.nursingRecords.unshift(record);
+            localStorage.setItem(`${APP_ID}_records`, JSON.stringify(state.nursingRecords));
+            updateUI(); // 更新歷史記錄顯示
+        }
+
+        /**
+         * 儲存搜尋歷史
+         * @param {string} term
+         */
+        function saveSearchHistory(term) {
+            // 僅儲存非空且尚未存在的搜尋詞
+            if (!term || state.searchHistory.includes(term)) return;
+            state.searchHistory.unshift(term);
+            state.searchHistory = state.searchHistory.slice(0, 5); // 只保留最近5筆
+            localStorage.setItem(`${APP_ID}_history`, JSON.stringify(state.searchHistory));
+            updateUI();
+        }
+
+        // --- 核心搜尋邏輯 ---
+
+        /**
+         * 智能模糊搜尋
+         * @param {string} query
+         * @param {string} fieldName
+         * @returns {Array} 匹配的病患清單
+         */
+        function fuzzySearch(query, fieldName) {
+            const normalizedQuery = query.toLowerCase().trim();
+            if (!normalizedQuery) return [];
+
+            return state.allPatients.filter(patient => {
+                const fieldValue = String(patient[fieldName]).toLowerCase();
+                return fieldValue.includes(normalizedQuery);
+            });
+        }
+
+        /**
+         * 智能識別並執行多元化搜尋
+         * @param {string} term
+         */
+        function executeSmartSearch(term) {
+            state.searchTerm = term;
+            state.searchResults = [];
+
+            // 移除全形空格並轉小寫
+            const q = term.trim().replace(/　/g, ' ').toLowerCase();
+
+            if (!q) {
+                // 如果搜尋詞為空，清空結果並更新 UI，回到快速存取頁面
+                updateUI();
+                return;
+            }
+
+            saveSearchHistory(term); // 儲存歷史
+
+            // 搜尋結果集
+            let results = [];
+
+            // 1. 純數字 → 優先搜尋病歷號 (A001001) / 次要搜尋床號 (1001)
+            if (/^\d+$/.test(q)) {
+                // 假設輸入純數字是病歷號的後幾位
+                results = fuzzySearch(q, 'medicalId');
+                if (results.length === 0) {
+                    // 或床號的數字部分
+                    results = state.allPatients.filter(p => p.bedNumber.includes(q));
+                }
+            }
+            // 2. 包含字母數字組合 (e.g., 1A-01, 2B-12) → 搜尋床號
+            else if (/[a-z\d\-]+/.test(q) && /^[a-z\d\-]+$/.test(q)) {
+                results = fuzzySearch(q, 'bedNumber');
+            }
+            // 3. 特定格式 (如：1A、2B) → 搜尋病房 (精確)
+            else if (WARD_NAMES.map(w => w.toLowerCase()).includes(q)) {
+                results = state.allPatients.filter(p => p.ward.toLowerCase() === q);
+            }
+            // 4. 中文字符 → 搜尋病患姓名 (模糊)
+            else if (/[\u4e00-\u9fa5]+/.test(q)) {
+                results = fuzzySearch(q, 'name');
+            }
+            // 5. 綜合搜尋 (如果以上都不符合，則對所有欄位執行模糊搜尋)
+            else {
+                // 彙總所有欄位的模糊搜尋結果
+                const nameMatches = fuzzySearch(q, 'name').map(p => p.medicalId);
+                const idMatches = fuzzySearch(q, 'medicalId').map(p => p.medicalId);
+                const bedMatches = fuzzySearch(q, 'bedNumber').map(p => p.medicalId);
+                const wardMatches = fuzzySearch(q, 'ward').map(p => p.medicalId);
+                
+                const allMatchIds = [...new Set([...nameMatches, ...idMatches, ...bedMatches, ...wardMatches])];
+                results = state.allPatients.filter(p => allMatchIds.includes(p.medicalId));
+            }
+
+            // 確保結果唯一性 (雖然上面已處理，但作為最後防線)
+            const uniqueResults = Array.from(new Set(results.map(p => p.medicalId)))
+                .map(id => results.find(p => p.medicalId === id));
+
+            state.searchResults = uniqueResults;
+            updateUI();
+        }
+
+        // 搜尋輸入 Debounce 定時器
+        let searchTimeout;
+
+        /**
+         * 處理一般輸入和 Debounce
+         * @param {Event} event 
+         */
+        function handleInputAndDebounce(event) {
+            const term = event.target.value;
+            clearTimeout(searchTimeout);
+            
+            // 立即更新 state.searchTerm 以確保輸入框顯示正確的文字
+            state.searchTerm = term; 
+
+            // 如果在組合中，等待 compositionend 觸發搜尋
+            if (event.isComposing) {
+                return;
+            }
+            
+            // 延遲執行搜尋
+            searchTimeout = setTimeout(() => {
+                executeSmartSearch(term);
+            }, 300);
+        }
+
+        /**
+         * 處理輸入法組合結束 (強制執行搜尋)
+         * @param {Event} event 
+         */
+        function handleCompositionEnd(event) {
+            clearTimeout(searchTimeout);
+            const term = event.target.value;
+            executeSmartSearch(term);
+        }
+        
+        // 將 executeSmartSearch 暴露為 window 方法，供快速篩選按鈕使用
+        window.executeSmartSearch = executeSmartSearch;
+
+        // --- 編輯功能函數 ---
+
+        /**
+         * 進入編輯模式
+         * @param {string} timestamp 記錄的時間戳
+         */
+        window.editRecord = (timestamp) => {
+            const display = document.getElementById(`record-display-${timestamp}`);
+            const editForm = document.getElementById(`edit-form-${timestamp}`);
+            const editButton = document.getElementById(`edit-btn-${timestamp}`);
+            
+            if (display && editForm) {
+                display.classList.add('hidden');
+                editForm.classList.remove('hidden');
+                editButton.classList.add('hidden'); // 隱藏修改按鈕
+                // 將焦點設定到 textarea
+                document.getElementById(`edit-content-${timestamp}`).focus();
+            }
+        };
+
+        /**
+         * 取消編輯模式
+         * @param {string} timestamp 記錄的時間戳
+         */
+        window.cancelEdit = (timestamp) => {
+            const display = document.getElementById(`record-display-${timestamp}`);
+            const editForm = document.getElementById(`edit-form-${timestamp}`);
+            const editButton = document.getElementById(`edit-btn-${timestamp}`);
+            
+            if (display && editForm) {
+                editForm.classList.add('hidden');
+                display.classList.remove('hidden');
+                editButton.classList.remove('hidden'); // 重新顯示修改按鈕
+            }
+        };
+        
+        /**
+         * 處理編輯提交
+         * @param {Event} event 
+         * @param {string} timestamp 記錄的時間戳
+         */
+        window.handleEditSubmit = (event, timestamp) => {
+            event.preventDefault();
+            const newContent = document.getElementById(`edit-content-${timestamp}`).value;
+            
+            // 找到要修改的記錄 (使用 medicalId 和 timestamp 進行唯一匹配)
+            const recordIndex = state.nursingRecords.findIndex(r => r.medicalId === state.currentPatient.medicalId && r.timestamp === timestamp);
+
+            if (recordIndex !== -1) {
+                // 執行修改
+                state.nursingRecords[recordIndex].content = newContent;
+                // 更新時間戳標記修改時間 (雖然會改變排序，但更符合數據修改的標記)
+                state.nursingRecords[recordIndex].timestamp = new Date().toISOString(); 
+                
+                // 儲存到 LocalStorage
+                localStorage.setItem(`${APP_ID}_records`, JSON.stringify(state.nursingRecords));
+                
+                // 提示成功並重新渲染 (確保修改後的記錄依然是第一筆)
+                showSystemMessage('外出外宿紀錄修改成功！', 'success');
+                updateUI();
+            } else {
+                showSystemMessage('記錄修改失敗：找不到該筆記錄。', 'error');
+                // 即使失敗也退出編輯模式
+                cancelEdit(timestamp);
+            }
+        };
+
+        // --- UI 渲染函數 ---
+
+        /**
+         * 渲染主頁面 (Home)
+         */
+        function renderHomePage() {
+            const app = document.getElementById('app');
+            app.innerHTML = `
+                <div class="space-y-8">
+                    <!-- 系統資訊區塊 -->
+                    <header class="flex flex-col sm:flex-row justify-between items-start sm:items-center p-4 bg-white rounded-xl shadow-lg border-t-4 border-blue-500">
+                        <div>
+                            <h1 class="text-3xl font-bold text-gray-800">護理整合紀錄入口系統</h1>
+                            <p class="text-gray-500 mt-1">快速存取與多維度病患搜尋</p>
+                        </div>
+                        <div class="mt-4 sm:mt-0 text-right">
+                            <p class="text-lg font-medium text-blue-600">${LOGIN_USER}</p>
+                            <p class="text-sm text-gray-500">${CURRENT_DATE} (${CURRENT_TIME})</p>
+                        </div>
+                    </header>
+
+                    <!-- 多元搜尋區塊 -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <div class="flex flex-col md:flex-row gap-4">
+                            <!-- 主搜尋框 -->
+                            <div class="relative w-full md:w-3/5">
+                                <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                                    <i data-lucide="search" class="w-5 h-5 text-gray-400"></i>
+                                </span>
+                                <!-- 移除 oninput 屬性，改為 JS 監聽 -->
+                                <input
+                                    type="text"
+                                    id="main-search-input"
+                                    placeholder="智能搜尋：病歷號、姓名、床號、病房 (如: 1A, 王小明, A001001)"
+                                    class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500 transition-shadow shadow-inner"
+                                    value="${state.searchTerm}"
+                                >
+                                <div id="search-suggestions" class="absolute z-10 w-full bg-white border border-gray-200 rounded-lg shadow-xl mt-1 hidden">
+                                    <!-- 搜尋建議將在此處動態載入 -->
+                                </div>
+                            </div>
+                            <!-- 進階搜尋/篩選器按鈕 -->
+                            <div class="flex gap-2 w-full md:w-2/5">
+                                <button onclick="toggleSearchExpansion()" class="flex items-center justify-center px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm w-full md:w-auto flex-grow">
+                                    <i data-lucide="filter" class="w-5 h-5 mr-2"></i>
+                                    <span>${state.isSearchExpanded ? '收合篩選器' : '進階搜尋/篩選'}</span>
+                                </button>
+                                ${state.searchTerm ? `<button onclick="executeSmartSearch('')" class="px-4 py-3 bg-red-100 rounded-lg text-red-600 hover:bg-red-200 transition-colors shadow-sm w-auto">
+                                    <i data-lucide="x" class="w-5 h-5"></i>
+                                </button>` : ''}
+                            </div>
+                        </div>
+
+                        <!-- 進階篩選與歷史記錄 (動態展開) -->
+                        <div id="advanced-search-panel" class="mt-4 transition-all-300 ${state.isSearchExpanded ? 'max-h-96 opacity-100' : 'max-h-0 opacity-0 overflow-hidden'}">
+                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 border-t pt-4 mt-4">
+                                <!-- 常用病房快速存取 -->
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700 block mb-2">快速依病房篩選</label>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${WARD_NAMES.map(ward => `
+                                            <button onclick="executeSmartSearch('${ward}')" class="px-3 py-1 text-sm rounded-full bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors">
+                                                ${ward}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                                <!-- 搜尋歷史記錄 -->
+                                <div>
+                                    <label class="text-sm font-medium text-gray-700 block mb-2">搜尋歷史記錄</label>
+                                    <div class="flex flex-wrap gap-2">
+                                        ${state.searchHistory.map(term => `
+                                            <button onclick="executeSmartSearch('${term}')" class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors">
+                                                ${term}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 快速存取區塊 / 搜尋結果區塊 -->
+                    ${renderMainContent()}
+                </div>
+            `;
+            
+            // --- 後渲染事件監聽器設定 (修復中文輸入的關鍵) ---
+            const searchInput = document.getElementById('main-search-input');
+            if (searchInput) {
+                // 1. Debounce for regular and non-composing input
+                searchInput.addEventListener('input', handleInputAndDebounce);
+                // 2. Immediate search after composition ends (for IME/Chinese)
+                searchInput.addEventListener('compositionend', handleCompositionEnd);
+            }
+
+            // 初始化 Lucide 圖標
+            lucide.createIcons();
+        }
+
+        /**
+         * 渲染主內容：如果正在搜尋，顯示結果；否則顯示快速存取。
+         */
+        function renderMainContent() {
+            if (state.searchTerm && state.searchResults.length > 0) {
+                return renderSearchResults();
+            } else if (state.searchTerm && state.searchResults.length === 0) {
+                return renderNoResults();
+            } else {
+                return renderQuickAccess();
+            }
+        }
+
+        /**
+         * 渲染搜尋結果 (新增頭像)
+         */
+        function renderSearchResults() {
+            return `
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">搜尋結果 (${state.searchResults.length} 位病患)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-h-[60vh] overflow-y-auto pr-2">
+                        ${state.searchResults.map(p => `
+                            <div
+                                onclick="selectPatient('${p.medicalId}')"
+                                class="search-item p-4 border border-gray-200 rounded-lg cursor-pointer bg-blue-50 hover:bg-blue-100 transition-all-300 transform"
+                            >
+                                <div class="flex items-center space-x-3">
+                                    <!-- 新增頭像圖標 -->
+                                    <i data-lucide="user-circle" class="w-8 h-8 text-blue-400 flex-shrink-0"></i> 
+                                    
+                                    <div class="flex-grow">
+                                        <div class="flex justify-between items-center mb-1">
+                                            <span class="text-sm font-medium text-gray-500">${p.ward} - ${p.bedNumber}</span>
+                                            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-green-200 text-green-800">
+                                                ${p.nursingLevel}
+                                            </span>
+                                        </div>
+                                        <p class="text-xl font-bold text-gray-900">${p.name}</p>
+                                    </div>
+                                </div>
+                                <p class="text-sm text-gray-600 mt-2">病歷號: ${p.medicalId}</p>
+                                <p class="text-xs text-gray-500">主治醫師: ${p.attendingPhysician}</p>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * 渲染無結果提示
+         */
+        function renderNoResults() {
+            return `
+                <div class="bg-white p-12 rounded-xl shadow-lg text-center">
+                    <i data-lucide="circle-slash" class="w-12 h-12 text-red-400 mx-auto"></i>
+                    <h2 class="text-xl font-semibold text-gray-800 mt-4">查無結果</h2>
+                    <p class="text-gray-500 mt-2">請確認您的搜尋關鍵字是否正確，或嘗試其他搜尋方式。</p>
+                </div>
+            `;
+        }
+
+
+        /**
+         * 渲染快速存取區塊 (重症計數應為 0)
+         */
+        function renderQuickAccess() {
+            // 計算每個病房的病人數和重症數
+            const wardStats = WARD_NAMES.map(ward => {
+                const patients = state.allPatients.filter(p => p.ward === ward);
+                const criticalCount = patients.filter(p => p.nursingLevel === '重症護理').length; // 應為 0
+                return { ward, total: patients.length, critical: criticalCount };
+            });
+
+            // 取得最近記錄的病患（最近 3 筆）
+            const recentRecords = state.nursingRecords.slice(0, 3).map(record => {
+                // 從 allPatients 找到對應的病患資訊
+                const patient = state.allPatients.find(p => p.medicalId === record.medicalId);
+                return { ...record, ...patient };
+            }).filter(record => record.name); // 過濾掉找不到對應病患的記錄
+
+
+            return `
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- 病房總覽卡片 -->
+                    <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-lg">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                            <i data-lucide="bed-single" class="w-6 h-6 mr-2 text-blue-600"></i>
+                            病房總覽卡片 (共 ${state.allPatients.length} 位病患)
+                        </h2>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
+                            ${wardStats.map(stats => `
+                                <div onclick="executeSmartSearch('${stats.ward}')" class="p-4 rounded-xl bg-gray-50 border border-gray-200 text-center cursor-pointer hover:bg-gray-100 transition-colors shadow-sm">
+                                    <p class="text-2xl font-bold ${stats.critical > 0 ? 'text-red-500' : 'text-blue-600'}">${stats.ward}</p>
+                                    <p class="text-sm text-gray-600 mt-1">${stats.total} 床</p>
+                                    ${stats.critical > 0 ? `<p class="text-xs font-semibold text-red-500">(${stats.critical} 重症)</p>` : '<p class="text-xs text-gray-400">狀態良好</p>'}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- 最近記錄的病患 -->
+                    <div class="lg:col-span-1 bg-white p-6 rounded-xl shadow-lg">
+                        <h2 class="text-xl font-semibold text-gray-800 mb-4 flex items-center">
+                            <i data-lucide="history" class="w-6 h-6 mr-2 text-green-600"></i>
+                            最近記錄的病患
+                        </h2>
+                        ${recentRecords.length > 0 ? recentRecords.map(record => `
+                            <div onclick="selectPatient('${record.medicalId}')" class="flex items-center p-3 rounded-lg hover:bg-green-50 transition-colors cursor-pointer mb-2 border border-gray-100">
+                                <div class="flex-shrink-0">
+                                    <span class="text-sm font-bold text-green-700">${record.ward}-${record.bedNumber}</span>
+                                </div>
+                                <div class="ml-3 flex-grow">
+                                    <p class="text-base font-medium text-gray-800">${record.name}</p>
+                                    <p class="text-xs text-gray-500">記錄於 ${record.time}</p>
+                                </div>
+                                <i data-lucide="chevron-right" class="w-4 h-4 text-gray-400"></i>
+                            </div>
+                        `).join('') : '<p class="text-gray-500 text-sm">此病患目前沒有外出外宿紀錄。</p>'}
+                    </div>
+                </div>
+            `;
+        }
+
+        /**
+         * 渲染護理記錄頁面 (已修改為外出外宿記錄介面)
+         */
+        function renderRecordPage() {
+            if (!state.currentPatient) {
+                state.currentPage = 'home';
+                updateUI();
+                return;
+            }
+
+            const p = state.currentPatient;
+            const app = document.getElementById('app');
+
+            // 取得該病患的歷史記錄，並按時間倒序排序 (最新在最前)
+            const patientRecords = state.nursingRecords
+                .filter(r => r.medicalId === p.medicalId)
+                .sort((a, b) => new Date(`${b.date} ${b.time}`) - new Date(`${a.date} ${a.time}`));
+
+            const lastRecord = patientRecords.length > 0 ? patientRecords[0] : null;
+
+            // 根據性別選擇圖標
+            const iconName = p.gender === '男' ? 'user' : 'user'; // 統一使用 'user' 圖標
+            const iconColor = p.gender === '男' ? 'text-blue-500' : 'text-pink-500';
+
+            app.innerHTML = `
+                <div class="max-w-4xl mx-auto space-y-6">
+                    <!-- 頁面標題與導航 -->
+                    <div class="flex justify-between items-center pb-4 border-b border-gray-200">
+                        <h1 class="text-2xl font-bold text-gray-800">
+                            外出外宿紀錄 - <span class="text-blue-600">${p.ward}-${p.bedNumber} ${p.name}</span>
+                        </h1>
+                        <button onclick="navigateHome()" class="flex items-center px-4 py-2 bg-gray-200 rounded-lg text-gray-700 hover:bg-gray-300 transition-colors shadow-sm">
+                            <i data-lucide="arrow-left" class="w-4 h-4 mr-2"></i>
+                            返回入口頁面
+                        </button>
+                    </div>
+
+                    <!-- 病患基本資訊區塊 (新增頭像) -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg border-l-4 border-blue-500">
+                        <div class="flex items-center space-x-6">
+                            <!-- 頭像圖標 -->
+                            <div class="flex-shrink-0">
+                                <i data-lucide="${iconName}" class="w-12 h-12 ${iconColor} bg-gray-100 p-2 rounded-full border border-gray-300"></i>
+                            </div>
+                            
+                            <!-- 基本資訊 -->
+                            <div class="flex-grow">
+                                <h2 class="text-lg font-semibold text-gray-800 mb-4">病患基本資訊</h2>
+                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+                                    <div><span class="font-medium text-gray-500">病歷號:</span> <span class="font-bold text-gray-800">${p.medicalId}</span></div>
+                                    <div><span class="font-medium text-gray-500">性別/年齡:</span> ${p.gender} / ${p.age} 歲</div>
+                                    <div><span class="font-medium text-gray-500">主治醫師:</span> ${p.attendingPhysician}</div>
+                                    <div><span class="font-medium text-gray-500">入院日期:</span> ${p.admissionDate}</div>
+                                    <div class="sm:col-span-4"><span class="font-medium text-gray-500">護理等級:</span> <span class="font-semibold px-2 py-0.5 rounded-full bg-green-200 text-green-800">${p.nursingLevel}</span></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- ---------------------------------------------------- -->
+                    <!-- 1. 上一筆外出紀錄 (列出與修改) -->
+                    <!-- ---------------------------------------------------- -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                            <i data-lucide="clipboard-list" class="w-5 h-5 mr-2 text-indigo-600"></i>
+                            上一筆外出外宿紀錄
+                        </h2>
+                        ${lastRecord ? `
+                            <div class="p-4 border border-indigo-200 rounded-lg bg-indigo-50">
+                                <div class="flex justify-between items-start text-sm mb-2">
+                                    <!-- 紀錄時間與修改按鈕 -->
+                                    <span class="font-semibold text-indigo-700 text-base flex items-center">
+                                        ${lastRecord.date} ${lastRecord.time}
+                                        <button id="edit-btn-${lastRecord.timestamp}" onclick="editRecord('${lastRecord.timestamp}')" class="ml-3 px-3 py-1 text-xs rounded-full bg-blue-500 text-white hover:bg-blue-600 transition-colors flex items-center shadow-md">
+                                            <i data-lucide="edit-3" class="w-4 h-4 mr-1"></i>
+                                            修改
+                                        </button>
+                                    </span>
+                                    <span class="text-xs text-gray-500">記錄人員: ${lastRecord.recorder}</span>
+                                </div>
+                                <!-- 顯示內容 -->
+                                <p id="record-display-${lastRecord.timestamp}" class="text-gray-700 whitespace-pre-wrap">${lastRecord.content || '(無紀錄內容)'}</p>
+                                
+                                <!-- 編輯表單 (預設隱藏) -->
+                                <form id="edit-form-${lastRecord.timestamp}" class="hidden mt-4" onsubmit="handleEditSubmit(event, '${lastRecord.timestamp}')">
+                                    <textarea id="edit-content-${lastRecord.timestamp}" rows="4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">${lastRecord.content || ''}</textarea>
+                                    <div class="flex justify-end space-x-2 mt-2">
+                                        <button type="button" onclick="cancelEdit('${lastRecord.timestamp}')" class="px-4 py-2 text-sm bg-gray-300 rounded-lg hover:bg-gray-400">取消</button>
+                                        <button type="submit" class="px-4 py-2 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600">儲存修改</button>
+                                    </div>
+                                </form>
+                                
+                                <!-- ---------------------------------------------------- -->
+                                <!-- 2. 舊歷史記錄列表 (可捲動) -->
+                                <!-- ---------------------------------------------------- -->
+                                <div class="border-t border-indigo-200 mt-4 pt-4">
+                                    <h3 class="text-sm font-medium text-gray-600 mb-2">所有歷史紀錄 (${patientRecords.length} 筆)</h3>
+                                    <div class="max-h-40 overflow-y-auto space-y-2">
+                                        ${patientRecords.slice(1).map(r => `
+                                            <div class="p-2 bg-white rounded border border-gray-100 text-xs">
+                                                <span class="font-semibold text-gray-600">${r.date} ${r.time}</span> (by ${r.recorder})
+                                                <p class="mt-1 text-gray-500">${r.content || '(無紀錄內容)'}</p>
+                                            </div>
+                                        `).join('') || '<p class="text-gray-500 text-xs">無更多舊紀錄。</p>'}
+                                    </div>
+                                </div>
+                            </div>
+                        ` : '<p class="text-gray-500 text-sm">此病患目前沒有外出外宿紀錄。</p>'}
+                    </div>
+
+                    <!-- ---------------------------------------------------- -->
+                    <!-- 3. 新增外出外宿記錄輸入區塊 (內容非必填) -->
+                    <!-- ---------------------------------------------------- -->
+                    <div class="bg-white p-6 rounded-xl shadow-lg">
+                        <h2 class="text-lg font-semibold text-gray-800 mb-4">新增外出外宿紀錄</h2>
+                        <form id="nursing-record-form" onsubmit="handleRecordSubmit(event)">
+                            <div class="grid grid-cols-2 gap-4 mb-4">
+                                <div>
+                                    <label for="record-date" class="block text-sm font-medium text-gray-700">記錄日期</label>
+                                    <input type="date" id="record-date" value="${CURRENT_DATE}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                                <div>
+                                    <label for="record-time" class="block text-sm font-medium text-gray-700">記錄時間</label>
+                                    <input type="time" id="record-time" value="${CURRENT_TIME}" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                </div>
+                            </div>
+                            <div class="mb-4">
+                                <!-- 移除 (必填) 標籤，並移除 required 屬性 -->
+                                <label for="record-content" class="block text-sm font-medium text-gray-700">外出外宿紀錄</label>
+                                <textarea id="record-content" rows="6" placeholder="請輸入外出或外宿的詳細時間、地點與原因..." class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+                            </div>
+                            <div class="flex justify-end">
+                                <button type="submit" class="flex items-center px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-md">
+                                    <i data-lucide="save" class="w-5 h-5 mr-2"></i>
+                                    新增外出外宿紀錄
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            `;
+            lucide.createIcons();
+        }
+
+        // --- 事件處理函數 ---
+
+        /**
+         * 處理病患選擇
+         * @param {string} medicalId
+         */
+        window.selectPatient = (medicalId) => {
+            state.currentPatient = state.allPatients.find(p => p.medicalId === medicalId);
+            state.currentPage = 'record';
+            updateUI();
+        };
+
+        /**
+         * 處理外出外宿記錄提交
+         * @param {Event} event
+         */
+        window.handleRecordSubmit = (event) => {
+            event.preventDefault();
+            const date = document.getElementById('record-date').value;
+            const time = document.getElementById('record-time').value;
+            const content = document.getElementById('record-content').value.trim();
+            const form = document.getElementById('nursing-record-form');
+
+            // 根據需求移除內容必填驗證
+
+            const newRecord = {
+                medicalId: state.currentPatient.medicalId,
+                date: date,
+                time: time,
+                content: content,
+                recorder: LOGIN_USER,
+                timestamp: new Date().toISOString(),
+            };
+
+            saveNursingRecord(newRecord);
+            form.reset();
+            // 重設日期時間為當前 (模擬)
+            document.getElementById('record-date').value = CURRENT_DATE;
+            document.getElementById('record-time').value = CURRENT_TIME;
+
+            // 成功提示，並重新渲染記錄頁面以顯示新記錄
+            showSystemMessage(`已成功為 ${state.currentPatient.name} 新增外出外宿紀錄！`, 'success');
+            renderRecordPage(); // 重新渲染以更新歷史記錄
+        };
+
+        /**
+         * 切換進階搜尋/篩選器的展開狀態
+         */
+        window.toggleSearchExpansion = () => {
+            state.isSearchExpanded = !state.isSearchExpanded;
+            updateUI();
+        };
+
+        /**
+         * 導航回首頁
+         */
+        window.navigateHome = () => {
+            state.currentPage = 'home';
+            state.currentPatient = null;
+            state.searchTerm = '';
+            state.searchResults = [];
+            updateUI();
+        };
+
+        /**
+         * 系統訊息顯示 (取代 alert)
+         * @param {string} message
+         * @param {'success'|'error'} type
+         */
+        function showSystemMessage(message, type) {
+            let messageBox = document.getElementById('system-message-box');
+            if (!messageBox) {
+                messageBox = document.createElement('div');
+                messageBox.id = 'system-message-box';
+                messageBox.className = 'fixed top-0 inset-x-0 p-4 z-50 pointer-events-none';
+                document.body.appendChild(messageBox);
+            }
+
+            const alertDiv = document.createElement('div');
+            const baseClasses = 'mx-auto p-4 rounded-lg shadow-lg max-w-sm pointer-events-auto flex items-center';
+            const colorClasses = type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white';
+
+            alertDiv.className = `${baseClasses} ${colorClasses} transform translate-y-[-100px] opacity-0 transition-all duration-300`;
+            alertDiv.innerHTML = `
+                <i data-lucide="${type === 'success' ? 'check-circle' : 'alert-triangle'}" class="w-5 h-5 mr-3"></i>
+                <span>${message}</span>
+            `;
+
+            messageBox.appendChild(alertDiv);
+            lucide.createIcons();
+
+            // 觸發動畫
+            setTimeout(() => {
+                alertDiv.classList.remove('translate-y-[-100px]', 'opacity-0');
+            }, 10);
+
+            // 5秒後自動隱藏
+            setTimeout(() => {
+                alertDiv.classList.add('translate-y-[-100px]', 'opacity-0');
+                setTimeout(() => alertDiv.remove(), 300);
+            }, 5000);
+        }
+
+        /**
+         * 主 UI 更新函數
+         */
+        function updateUI() {
+            if (state.currentPage === 'home') {
+                renderHomePage();
+            } else if (state.currentPage === 'record') {
+                renderRecordPage();
+            }
+        }
+
+        // --- 應用程式啟動 ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // 確保初始狀態正確
+            state.currentPatient = null;
+            updateUI();
+        });
+    </script>
+</body>
+</html>

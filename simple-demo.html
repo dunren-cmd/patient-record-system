@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Supabase 資料讀取示範</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        #status {
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            background-color: #e3f2fd;
+            color: #1976d2;
+        }
+
+        #patients {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .patient-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .patient-card h3 {
+            color: #1976d2;
+            margin-bottom: 10px;
+            font-size: 18px;
+        }
+
+        .patient-card p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .patient-card strong {
+            color: #333;
+        }
+
+        button {
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-bottom: 20px;
+        }
+
+        button:hover {
+            background-color: #1565c0;
+        }
+
+        .error {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+
+        .success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Supabase 資料讀取示範</h1>
+
+    <button onclick="loadPatients()">重新載入資料</button>
+
+    <div id="status">載入中...</div>
+
+    <div id="patients"></div>
+
+    <!-- 引入 Supabase JS CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        // Supabase 設定
+        const SUPABASE_URL = 'http://192.168.68.122:64321';
+        const SUPABASE_KEY = 'sb_publishable_ACJWlzQHlZjBrEguHvfOxg_3BJgxAaH';
+
+        // 初始化 Supabase 客戶端
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+        // 狀態和病患容器的 DOM 元素
+        const statusDiv = document.getElementById('status');
+        const patientsDiv = document.getElementById('patients');
+
+        // 從 Supabase 讀取病患資料
+        async function loadPatients() {
+            try {
+                // 顯示載入狀態
+                statusDiv.textContent = '正在從 Supabase 讀取資料...';
+                statusDiv.className = '';
+                patientsDiv.innerHTML = '';
+
+                // 從 patients 表讀取所有資料
+                const { data, error } = await supabase
+                    .from('patients')
+                    .select('*')
+                    .order('ward', { ascending: true });
+
+                if (error) {
+                    throw error;
+                }
+
+                // 成功讀取資料
+                statusDiv.textContent = `成功讀取 ${data.length} 位病患資料`;
+                statusDiv.className = 'success';
+
+                // 顯示每位病患的資料
+                if (data.length === 0) {
+                    patientsDiv.innerHTML = '<p>沒有資料</p>';
+                } else {
+                    data.forEach(patient => {
+                        const card = createPatientCard(patient);
+                        patientsDiv.appendChild(card);
+                    });
+                }
+
+            } catch (error) {
+                // 錯誤處理
+                console.error('Error:', error);
+                statusDiv.textContent = `錯誤: ${error.message}`;
+                statusDiv.className = 'error';
+            }
+        }
+
+        // 創建病患卡片
+        function createPatientCard(patient) {
+            const card = document.createElement('div');
+            card.className = 'patient-card';
+
+            card.innerHTML = `
+                <h3>${patient.name}</h3>
+                <p><strong>病歷號:</strong> ${patient.medical_id}</p>
+                <p><strong>病房/床號:</strong> ${patient.ward} - ${patient.bed_number}床</p>
+                <p><strong>性別/年齡:</strong> ${patient.gender} / ${patient.age}歲</p>
+                <p><strong>主治醫師:</strong> ${patient.attending_physician}</p>
+                <p><strong>入院日期:</strong> ${patient.admission_date}</p>
+                <p><strong>護理等級:</strong> ${patient.nursing_level}</p>
+            `;
+
+            return card;
+        }
+
+        // 頁面載入時自動讀取資料
+        window.addEventListener('load', loadPatients);
+    </script>
+</body>
+
+</html>
