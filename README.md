@@ -100,5 +100,28 @@ docker run -d -p 8080:80 --name frontend patient-system-frontend
 
 現在，您可以使用瀏覽器訪問 `http://您的Linux主機IP:8080` 即可看到系統。
 
+## Windows 部署 (使用 Docker Desktop)
+
+Windows 上也可以使用 Docker 部署，步驟與 Linux 類似，但請確保已安裝 **Docker Desktop**。
+
+1.  **開啟 Docker Desktop**：確保左下角狀態為綠色 (Running)。
+2.  **下載專案**：
+    ```powershell
+    git clone https://github.com/dunren-cmd/patient-record-system.git
+    cd patient-record-system
+    ```
+3.  **啟動後端**：
+    ```powershell
+    npx supabase start
+    ```
+4.  **部署前端**：
+    開啟 PowerShell 進入 `frontend` 資料夾：
+    ```powershell
+    cd frontend
+    docker build -t patient-system-frontend .
+    docker run -d -p 8080:80 --name frontend patient-system-frontend
+    ```
+5.  **瀏覽**：打開瀏覽器訪問 `http://localhost:8080`。
+
 ## 資料庫還原
 本專案包含 Migration 腳本，`npx supabase start` 啟動時會自動建立資料表並寫入 50 筆預設病患資料，無需手動還原。
