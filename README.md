@@ -60,5 +60,45 @@ npm run dev
 ### 6. 開始使用
 打開瀏覽器訪問顯示的網址 (通常是 `http://localhost:5173`) 即可開始使用！
 
+## Linux 伺服器部署 (使用 Docker)
+
+如果您想在 Linux (如 Ubuntu/Debian) 上部署，推薦使用 Docker 方式。
+
+### 1. 安裝 Docker
+```bash
+# 更新套件庫
+sudo apt-get update
+sudo apt-get install ca-certificates curl gnupg
+
+# 安裝 Docker (以 Ubuntu 為例，其他發行版請參考 Docker 官網)
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+```
+
+### 2. 下載專案與啟動資料庫
+```bash
+git clone https://github.com/dunren-cmd/patient-record-system.git
+cd patient-record-system
+
+# 啟動 Supabase (後端)
+npx supabase start
+```
+*注意：Linux 上可能需要 `sudo` 權限，或將用戶加入 docker 群組。*
+
+### 3. 部署前端 (Production Mode)
+我們已經準備好了 `Dockerfile`，可以直接打包成映像檔執行：
+
+```bash
+cd frontend
+
+# 1. 建立映像檔
+docker build -t patient-system-frontend .
+
+# 2. 啟動容器 (將 80 port 對應到機器的 8080 port)
+docker run -d -p 8080:80 --name frontend patient-system-frontend
+```
+
+現在，您可以使用瀏覽器訪問 `http://您的Linux主機IP:8080` 即可看到系統。
+
 ## 資料庫還原
 本專案包含 Migration 腳本，`npx supabase start` 啟動時會自動建立資料表並寫入 50 筆預設病患資料，無需手動還原。
