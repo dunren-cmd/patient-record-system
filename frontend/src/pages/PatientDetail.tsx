@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Patient, NursingRecord } from '../types/index';
+import { PHYSICIANS } from '../constants';
 
 interface PatientDetailProps {
     patient: Patient;
@@ -235,7 +236,14 @@ export const PatientDetail: React.FC<PatientDetailProps> = ({ patient, allPatien
                             </div>
                             <label>
                                 主治醫師:
-                                <input type="text" name="attending_physician" value={editFormData.attending_physician} onChange={handleInputChange} style={{ width: '100%', padding: '5px', marginTop: '5px' }} />
+                                <select
+                                    name="attending_physician"
+                                    value={editFormData.attending_physician}
+                                    onChange={handleInputChange}
+                                    style={{ width: '100%', padding: '5px', marginTop: '5px' }}
+                                >
+                                    {PHYSICIANS.map(p => <option key={p} value={p}>{p}</option>)}
+                                </select>
                             </label>
                             <label>
                                 入院日期:

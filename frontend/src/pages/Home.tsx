@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import type { Patient } from '../types/index';
 import { QuickAccessBlock } from '../components/QuickAccessBlock';
 import { MultiSearchBlock } from '../components/MultiSearchBlock';
+import { AddPatientModal } from '../components/AddPatientModal';
 
 interface HomeProps {
     patients: Patient[];
@@ -12,6 +13,7 @@ export const Home: React.FC<HomeProps> = ({ patients, onPatientSelect }) => {
     const [filteredPatients, setFilteredPatients] = useState<Patient[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedWard, setSelectedWard] = useState<string | null>(null);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
     useEffect(() => {
         filterPatients();
@@ -43,7 +45,35 @@ export const Home: React.FC<HomeProps> = ({ patients, onPatientSelect }) => {
 
     return (
         <div>
-            <h1 style={{ fontSize: '24px', marginBottom: '20px', color: '#333' }}>護理整合紀錄入口系統</h1>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h1 style={{ fontSize: '24px', color: '#333', margin: 0 }}>護理整合紀錄入口系統</h1>
+                <button
+                    onClick={() => setIsAddModalOpen(true)}
+                    style={{
+                        backgroundColor: '#2196f3',
+                        color: 'white',
+                        border: 'none',
+                        padding: '10px 20px',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        fontWeight: 'bold',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }}
+                >
+                    + 新增病患
+                </button>
+            </div>
+
+            {isAddModalOpen && (
+                <AddPatientModal
+                    onClose={() => setIsAddModalOpen(false)}
+                    onSuccess={() => {
+                        // 重新整理頁面以顯示新病患
+                        window.location.reload();
+                    }}
+                />
+            )}
 
             <QuickAccessBlock
                 patients={patients}
